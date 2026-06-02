@@ -8,6 +8,8 @@ services:
       - "${APP_PORT:-8080}:8080"
     volumes:
       - avtorgraf-data:/app/data
+      # При необходимости смонтируйте директорию с документами LightRAG:
+      # - /root/lightrag/LightRAG/data/inputs/__enqueued__:/app/inputs:ro
     restart: unless-stopped
 
 volumes:

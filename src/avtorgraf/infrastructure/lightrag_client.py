@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import time
 import urllib.error
 import urllib.parse
@@ -148,13 +149,121 @@ class LightRagClient:
 
     def get_document_content(self, document_name: str) -> dict[str, Any]:
         """
-        Получает содержимое документа из LightRAG.
-        
-        Args:
-            document_name: Имя документа для получения
-            
-        Returns:
-            Словарь с содержимым документа
+        Получает содержимое документа.
+        Сначала пытается найти и прочитать файл локально.
+        Если локальный файл не найден или не может быть прочитан, запрашивает фрагменты через API LightRAG.
         """
-        data, _ = self._request("GET", f"/documents/{urllib.parse.quote(document_name)}")
-        return data
+        # Сначала пробуем найти файл локально
+        documents_dir = getattr(self.settings, "documents_dir", "")
+        if documents_dir:
+            file_path = self._find_local_file(document_name, documents_dir)
+            if file_path:
+                try:
+                    content = self._read_local_file(file_path)
+                    return {
+                        "content": content,
+                        "source": f"local_filesystem ({file_path.name})"
+                    }
+                except Exception as exc:
+                    # Логируем ошибку и пробуем получить из RAG
+                    pass
+
+        # Fallback: получаем фрагменты из LightRAG через /query/data
+        try:
+            return self._get_content_from_rag_chunks(document_name)
+        except Exception as exc:
+            raise LightRagError(f"Не удалось получить содержимое документа '{document_name}': {exc}")
+
+    def _find_local_file(self, doc_name: str, directory: str) -> Path | None:
+        path = Path(directory)
+        if not path.exists() or not path.is_dir():
+            return None
+            
+        doc_name_lower = doc_name.lower()
+        for file in path.glob("**/*"):
+            if file.is_file():
+                if doc_name_lower in file.name.lower():
+                    return file
+        return None
+
+    def _read_local_file(self, file_path: Path) -> str:
+        suffix = file_path.suffix.lower()
+        if suffix == ".docx":
+            return self._extract_text_from_docx(file_path)
+        elif suffix == ".pdf":
+            return self._extract_text_from_pdf(file_path)
+        elif suffix in {".txt", ".md", ".json"}:
+            return file_path.read_text(encoding="utf-8", errors="replace")
+        else:
+            raise ValueError(f"Неподдерживаемый формат файла: {suffix}")
+
+    def _extract_text_from_docx(self, file_path: Path) -> str:
+        import zipfile
+        import xml.etree.ElementTree as ET
+        
+        namespaces = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        paragraphs = []
+        
+        with zipfile.ZipFile(file_path) as docx:
+            xml_content = docx.read("word/document.xml")
+            root = ET.fromstring(xml_content)
+            for paragraph in root.iter(f"{{{namespaces['w']}}}p"):
+                texts = []
+                for node in paragraph.iter(f"{{{namespaces['w']}}}t"):
+                    if node.text:
+                        texts.append(node.text)
+                if texts:
+                    paragraphs.append("".join(texts))
+                    
+        return "\n\n".join(paragraphs)
+
+    def _extract_text_from_pdf(self, file_path: Path) -> str:
+        try:
+            import pypdf
+        except ImportError as exc:
+            raise RuntimeError("Библиотека pypdf не установлена") from exc
+            
+        reader = pypdf.PdfReader(file_path)
+        text_parts = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                text_parts.append(text)
+        return "\n\n".join(text_parts)
+
+    def _get_content_from_rag_chunks(self, document_name: str) -> dict[str, Any]:
+        payload = {
+            "query": document_name,
+            "mode": "naive",
+            "chunk_top_k": 300,
+        }
+        
+        data, _ = self._request("POST", "/query/data", payload)
+        retrieved_data = data.get("data", {})
+        chunks = retrieved_data.get("chunks", [])
+        
+        doc_name_lower = document_name.lower()
+        matched_contents = []
+        seen_contents = set()
+        
+        for chunk in chunks:
+            file_path = chunk.get("file_path", "")
+            content = chunk.get("content", "")
+            
+            if file_path and doc_name_lower in file_path.lower():
+                if content and content not in seen_contents:
+                    seen_contents.add(content)
+                    matched_contents.append(content)
+                    
+        if not matched_contents:
+            for chunk in chunks:
+                content = chunk.get("content", "")
+                if content and content not in seen_contents:
+                    seen_contents.add(content)
+                    matched_contents.append(content)
+                    
+        if not matched_contents:
+            return {"content": "Документ не найден в RAG и локальной файловой системе."}
+            
+        content_text = "\n\n---\n\n".join(matched_contents)
+        return {"content": content_text, "source": "rag_knowledge_graph"}

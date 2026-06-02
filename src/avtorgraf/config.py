@@ -29,6 +29,7 @@ class Settings:
     app_port: int
     database_path: str
     static_dir: str
+    documents_dir: str
     lightrag_base_url: str
     lightrag_api_key: str
     lightrag_bearer_token: str
@@ -49,6 +50,7 @@ class Settings:
             app_port=int(os.getenv("APP_PORT", "8080")),
             database_path=os.getenv("DATABASE_PATH", "data/avtorgraf.sqlite3"),
             static_dir=os.getenv("STATIC_DIR", "static"),
+            documents_dir=os.getenv("DOCUMENTS_DIR", "data/inputs/__enqueued__"),
             lightrag_base_url=os.getenv("LIGHTRAG_BASE_URL", "http://46.17.105.48:9621"),
             lightrag_api_key=os.getenv("LIGHTRAG_API_KEY", ""),
             lightrag_bearer_token=os.getenv("LIGHTRAG_BEARER_TOKEN", ""),

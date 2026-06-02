@@ -579,7 +579,16 @@ async function openDocumentModal(docName, section = null) {
     const response = await fetch(`/api/documents/${encodeURIComponent(docName)}`);
     
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      let errMsg = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        if (errorData && errorData.error) {
+          errMsg = errorData.error;
+        }
+      } catch (e) {
+        // Игнорируем ошибку парсинга JSON
+      }
+      throw new Error(errMsg);
     }
     
     const data = await response.json();
