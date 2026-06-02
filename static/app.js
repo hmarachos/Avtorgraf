@@ -135,7 +135,6 @@ async function ask(text) {
   const composedQuestion = `[Роль: ${state.role}] ${text}`;
   addMessage("user", text);
   setLoading(true);
-  console.log("🔄 Отправляем вопрос...");
 
   try {
     const response = await fetch("/api/chat", {
@@ -159,10 +158,7 @@ async function ask(text) {
     // Создаем сообщение ассистента с динамическим контентом
     const assistantMessage = createAssistantMessage();
 
-    const contentType = response.headers.get("content-type");
-    console.log("📝 Content-Type:", contentType);
-
-    if (contentType?.includes("application/x-ndjson")) {
+    if (response.headers.get("content-type")?.includes("application/x-ndjson")) {
       // Streaming режим (NDJSON)
       console.log("🌊 Начинаем обработку streaming...");
       await handleStreamingResponse(response, assistantMessage);
@@ -179,6 +175,7 @@ async function ask(text) {
   } finally {
     console.log("🎯 Завершаем запрос, отключаем loading");
     setLoading(false);
+    console.log("✅ Кнопка сброшена, статус:", sendButton.textContent);
   }
 }
 
@@ -217,12 +214,17 @@ async function handleStreamingResponse(response, assistantMessage) {
   const decoder = new TextDecoder();
   let buffer = "";
   let isDone = false;
+  let processedDone = false;
 
   try {
+    let iteration = 0;
     while (!isDone) {
+      iteration++;
+      console.log("🔄 handleStreamingResponse итерация", iteration);
       const { done, value } = await reader.read();
 
       if (done) {
+        console.log("✅ reader.read() вернул done:", done);
         isDone = true;
       } else {
         buffer += decoder.decode(value, { stream: true });
@@ -235,7 +237,18 @@ async function handleStreamingResponse(response, assistantMessage) {
       for (let i = 0; i < lines.length - 1; i++) {
         const line = lines[i].trim();
         if (line) {
-          processNDJSONLine(line, assistantMessage);
+          try {
+            const data = JSON.parse(line);
+            processNDJSONLine(line, assistantMessage);
+            if (data.type === "done") {
+              processedDone = true;
+              isDone = true; // Принудительно завершаем цикл после done
+              console.log("🛑 Принудительное завершение цикла после done");
+            }
+          } catch (e) {
+            console.error("Ошибка парсинга NDJSON:", e, line);
+            processedDone = false; // Убедимся что не true
+          }
         }
       }
       
@@ -244,15 +257,27 @@ async function handleStreamingResponse(response, assistantMessage) {
     }
 
     // Обрабатываем оставшуюся часть буфера если есть
-    if (buffer.trim()) {
-      processNDJSONLine(buffer.trim(), assistantMessage);
+    if (buffer.trim() && !isDone) {
+      try {
+        const data = JSON.parse(buffer.trim());
+        processNDJSONLine(buffer.trim(), assistantMessage);
+        if (data.type === "done") {
+          processedDone = true;
+          isDone = true; // Принудительно завершаем цикл после done
+          console.log("🛑 Принудительное завершение цикла после done (остаток буфера)");
+        }
+      } catch (e) {
+        console.error("Ошибка парсинга последней строки:", e, buffer);
+      }
     }
     
-    return true; // Успешно завершилось
+    return processedDone; // Возвращаем true если успешно дошли до done
   } catch (error) {
     console.error("Ошибка streaming:", error);
     assistantMessage.bubble.innerHTML = `<p>❌ Ошибка при получении ответа: ${error.message}</p>`;
     return false; // Ошибка
+  } finally {
+    console.log("🏁 handleStreamingResponse завершен, processedDone:", processedDone);
   }
 }
 
@@ -280,7 +305,12 @@ function processNDJSONLine(line, assistantMessage) {
     } else if (data.type === "done") {
       // Ответ завершен - ЗДЕСЬ финализируем сообщение
       console.log("✅ Streaming завершен, финализируем сообщение");
-      finalizeAssistantMessage(assistantMessage);
+      try {
+        finalizeAssistantMessage(assistantMessage);
+      } catch (e) {
+        console.error("Ошибка при финализации сообщения:", e);
+        assistantMessage.bubble.innerHTML = `<p>❌ Ошибка при формировании ответа: ${e.message}</p>`;
+      }
     } else if (data.error) {
       // Ошибка
       console.error("⚠️ Ошибка из сервера:", data.error);
@@ -364,6 +394,7 @@ function finalizeAssistantMessage(assistantMessage) {
   makeDocumentLinksClickable(assistantMessage.article);
 
   messages.scrollTop = messages.scrollHeight;
+  console.log("✅ finalizeAssistantMessage завершена");
 }
 
 /**
@@ -456,25 +487,43 @@ async function refreshDocuments() {
     // Форматируем вывод: список документов и статус pipeline
     let output = "";
     
-    // Статус обработки
-    if (pipeline && pipeline.pipeline) {
-      output += `📊 Обработка: ${pipeline.pipeline}\n`;
-      if (pipeline.processed !== undefined) {
-        output += `✅ Обработано: ${pipeline.processed}\n`;
-      }
-      if (pipeline.pending !== undefined) {
-        output += `⏳ В очереди: ${pipeline.pending}\n`;
-      }
-      if (pipeline.errors !== undefined) {
-        output += `❌ Ошибок: ${pipeline.errors}\n`;
-      }
+    // Статус обработки - поддерживаем несколько форматов
+    if (pipeline && pipeline.job_name) {
+        output += `📊 Задача: ${pipeline.job_name}\n`;
+    }
+    if (pipeline && pipeline.status) {
+        output += `⚙️ Статус: ${pipeline.status}\n`;
+    }
+    if (pipeline && pipeline.docs !== undefined) {
+        output += `✅ Документов: ${pipeline.docs}\n`;
+    }
+    if (pipeline && pipeline.batchs !== undefined && pipeline.cur_batch !== undefined) {
+        output += `📦 Пакетов: ${pipeline.cur_batch}/${pipeline.batchs}\n`;
+    }
+    if (pipeline && pipeline.autoscanned !== undefined) {
+        output += `🔄 Автоподсказка: ${pipeline.autoscanned ? "вкл" : "выкл"}\n`;
+    }
+    if (pipeline && pipeline.busy !== undefined) {
+        output += `⚡ Занят: ${pipeline.busy ? "да" : "нет"}\n`;
     }
     
     output += "\n📚 Документы в базе знаний:\n";
     output += "─".repeat(40) + "\n";
     
-    // Обработка документов
-    if (docs && docs.documents && Array.isArray(docs.documents)) {
+    // Обработка документов - поддерживаем LightRAG формат с statuses.processed
+    if (docs && docs.statuses && Array.isArray(docs.statuses.processed)) {
+      if (docs.statuses.processed.length === 0) {
+        output += "(документы не загружены)\n";
+      } else {
+        docs.statuses.processed.forEach((doc, index) => {
+          const name = doc.file_path || doc.id || "Без имени";
+          const status = "processed";
+          const content_length = doc.content_length ? ` (${doc.content_length} байт)` : "";
+          output += `${index + 1}. ${name}${content_length}\n`;
+        });
+      }
+    } else if (docs && docs.documents && Array.isArray(docs.documents)) {
+      // Старый формат
       if (docs.documents.length === 0) {
         output += "(документы не загружены)\n";
       } else {

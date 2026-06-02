@@ -535,12 +535,7 @@ pre {
   }
 
   .side-pane {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .side-pane .panel:first-child {
-    grid-column: 1 / -1;
+    display: none;
   }
 }
 
@@ -578,8 +573,7 @@ pre {
     justify-content: space-between;
   }
 
-  .quick-grid,
-  .side-pane {
+  .quick-grid {
     grid-template-columns: 1fr;
   }
 

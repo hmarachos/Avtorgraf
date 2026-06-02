@@ -140,12 +140,41 @@ class LightRagClient:
     def documents(self) -> dict[str, Any]:
         """Получает список документов из базы знаний LightRAG."""
         data, _ = self._request("GET", "/documents")
+        # Возвращаем как есть, так как LightRAG возвращает {"statuses": {"processed": [...], "pending": [...]}}
+        # В интерфейсе уже реализован парсинг этого формата
         return data
 
     def pipeline_status(self) -> dict[str, Any]:
         """Получает статус обработки документов в LightRAG."""
         data, _ = self._request("GET", "/documents/pipeline_status")
-        return data
+        # LightRAG возвращает формат: {"autoscanned": bool, "busy": bool, "job_name": str, ...}
+        # Извлекаем полезную информацию для отображения
+        result = {}
+        
+        if "autoscanned" in data:
+            result["autoscanned"] = data["autoscanned"]
+        if "busy" in data:
+            result["busy"] = data["busy"]
+        if "job_name" in data:
+            result["job_name"] = data["job_name"]
+        if "docs" in data:
+            result["docs"] = data["docs"]
+        if "batchs" in data:
+            result["batchs"] = data["batchs"]
+        if "cur_batch" in data:
+            result["cur_batch"] = data["cur_batch"]
+        if "latest_message" in data:
+            result["latest_message"] = data["latest_message"]
+            
+        # Добавляем общую информацию
+        if result.get("busy"):
+            result["status"] = "processing"
+        elif result.get("job_name"):
+            result["status"] = "ready"
+        else:
+            result["status"] = "idle"
+            
+        return result
 
     def get_document_content(self, document_name: str) -> dict[str, Any]:
         """
