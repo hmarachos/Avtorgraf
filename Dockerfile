@@ -1,0 +1,17 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/src
+
+WORKDIR /app
+
+COPY src ./src
+COPY static ./static
+COPY README.md LICENSE ./
+
+RUN mkdir -p /app/data
+
+EXPOSE 8080
+
+CMD ["python", "-m", "avtorgraf.main"]

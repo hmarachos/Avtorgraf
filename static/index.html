@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>АВТОГРАФ</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Авторский надзор и стройконтроль</p>
+          <h1>АВТОГРАФ</h1>
+        </div>
+        <div class="status" id="status">
+          <span class="status-dot"></span>
+          <span>Проверка</span>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="chat-pane" aria-label="Диалог с ассистентом">
+          <div class="toolbar">
+            <div class="role-tabs" aria-label="Роль пользователя">
+              <button class="active" data-role="ГИП">ГИП</button>
+              <button data-role="Авторский надзор">АН</button>
+              <button data-role="Технический надзор">ТН</button>
+            </div>
+            <label class="mode">
+              <span>Режим</span>
+              <select id="mode">
+                <option value="mix">Mix</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="global">Global</option>
+                <option value="local">Local</option>
+                <option value="naive">Naive</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="quick-grid" id="quickGrid">
+            <button data-question="Подрядчик просит согласовать отечественный аналог оборудования. Какая процедура согласования замены материалов и какие документы нужны?">
+              Замена материалов
+            </button>
+            <button data-question="Строители залили бетон с дефектами и требуют подписать акт освидетельствования скрытых работ. Как корректно отказать и что записать в журнал авторского надзора?">
+              Скрытые работы
+            </button>
+            <button data-question="Что проверит инспектор Госстройнадзора на объекте и какие документы должны быть на строительной площадке?">
+              Визит инспектора
+            </button>
+            <button data-question="Составь черновик записи в журнал авторского надзора по выявленному отступлению от проектной документации.">
+              Запись в журнал
+            </button>
+          </div>
+
+          <div class="messages" id="messages">
+            <article class="message assistant">
+              <div class="avatar">AI</div>
+              <div class="bubble">
+                Задайте вопрос по нормам РБ, акту скрытых работ, замене материалов или процедуре контроля. Я передам запрос в LightRAG и верну ответ с нормативными основаниями.
+              </div>
+            </article>
+          </div>
+
+          <form class="composer" id="chatForm">
+            <textarea
+              id="question"
+              rows="3"
+              placeholder="Например: можно ли подписывать АОСР при выявленных дефектах бетона?"
+              required
+            ></textarea>
+            <button type="submit" id="sendButton">Отправить</button>
+          </form>
+        </section>
+
+        <aside class="side-pane" aria-label="Контекст и источники">
+          <section class="panel">
+            <h2>Нормативные ссылки</h2>
+            <div id="references" class="empty">Появятся после ответа LightRAG.</div>
+          </section>
+
+          <section class="panel compact">
+            <h2>Контроль ответа</h2>
+            <ul class="checklist">
+              <li>Только база знаний LightRAG</li>
+              <li>Приоритет норм Республики Беларусь</li>
+              <li>Пункты СН, СТБ и инструкций в ответе</li>
+              <li>История текущей сессии хранится в SQLite</li>
+            </ul>
+          </section>
+
+          <section class="panel compact">
+            <h2>Документы</h2>
+            <button class="secondary" id="refreshDocs">Обновить статус</button>
+            <pre id="docsStatus">Нет данных</pre>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,1 @@
+"""Avtorgraf application package."""
