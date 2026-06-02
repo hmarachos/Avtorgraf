@@ -354,41 +354,8 @@ function finalizeAssistantMessage(assistantMessage) {
 
   console.log("📍 Всего ссылок к отображению:", allReferences.length);
 
-  // Добавляем ссылки под ответом если они есть
-  if (allReferences.length > 0) {
-    console.log("✍️ Добавляем ссылки в DOM");
-    
-    const footer = document.createElement("footer");
-    footer.className = "message-references";
-
-    const title = document.createElement("small");
-    title.className = "references-title";
-    title.textContent = "📚 Нормативные основания:";
-    footer.append(title);
-
-    const list = document.createElement("div");
-    list.className = "references-list";
-
-    allReferences.forEach((ref) => {
-      const item = document.createElement("span");
-      item.className = "reference-item";
-      
-      if (typeof ref === "string") {
-        item.textContent = ref;
-      } else {
-        item.textContent = ref.title;
-        item.title = ref.source ? `Источник: ${ref.source}` : "";
-      }
-      
-      list.append(item);
-    });
-
-    footer.append(list);
-    assistantMessage.article.append(footer);
-    console.log("✅ Ссылки добавлены в DOM");
-  } else {
-    console.log("⚠️ Ссылок нет, только текст ответа");
-  }
+  // Ссылки не добавляем под ответом - они уже встроены в текст ответа
+  console.log("✅ Ссылки встроены в текст ответа");
 
   // Делаем ссылки на документы кликабельными
   makeDocumentLinksClickable(assistantMessage.article);
