@@ -1,0 +1,40 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Данные
+data/*.sqlite3
+data/*.db
+
+# Конфигурация
+.env
+.env.local
+
+# Документация
+*.md
+!README.md
+docs/
+
+# Прочее
+*.log
+.DS_Store
+Thumbs.db

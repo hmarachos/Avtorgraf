@@ -136,6 +136,16 @@ h2 {
   border-bottom: 1px solid var(--line);
 }
 
+.toolbar-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .role-tabs {
   display: flex;
   gap: 6px;
@@ -219,6 +229,7 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  overflow-x: visible;
 }
 
 .message {
@@ -226,6 +237,7 @@ h2 {
   grid-template-columns: 36px minmax(0, 1fr);
   gap: 10px;
   align-items: start;
+  overflow: visible;
 }
 
 .message.user {
@@ -263,6 +275,156 @@ h2 {
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  overflow: visible;
+}
+
+/* Форматирование текста ассистента */
+.message.assistant .bubble {
+  white-space: normal;
+}
+
+.bubble p {
+  margin: 0;
+  margin-bottom: 12px;
+}
+
+.bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.bubble h2 {
+  margin: 16px 0 8px;
+  font-size: 18px;
+}
+
+.bubble h3 {
+  margin: 14px 0 6px;
+  font-size: 16px;
+}
+
+.bubble h4 {
+  margin: 12px 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.bubble h2:first-child,
+.bubble h3:first-child,
+.bubble h4:first-child {
+  margin-top: 0;
+}
+
+.bubble strong {
+  font-weight: 700;
+}
+
+/* Кликабельные ссылки на документы в тексте */
+.doc-reference {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--accent);
+  transition: all 0.15s ease;
+}
+
+.doc-reference:hover {
+  color: var(--accent-2);
+  border-bottom-color: var(--accent-2);
+  background: rgba(36, 93, 77, 0.05);
+}
+
+.bubble em {
+  font-style: italic;
+}
+
+.bubble code {
+  background: var(--soft);
+  color: var(--accent-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 13px;
+}
+
+.bubble pre {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.bubble pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+}
+
+.bubble ul {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.bubble li {
+  margin-bottom: 6px;
+  list-style-type: disc;
+}
+
+.bubble br {
+  display: none;
+}
+
+/* Ссылки на документы под ответом */
+.message-references {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.references-title {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.references-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reference-item {
+  display: inline-block;
+  padding: 3px 6px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+  max-width: none;
+  min-width: fit-content;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.reference-item:hover {
+  background: rgba(36, 93, 77, 0.08);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(36, 93, 77, 0.15);
 }
 
 .composer {
@@ -312,7 +474,8 @@ textarea {
 .empty,
 pre {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .reference {
@@ -356,6 +519,10 @@ pre {
   margin: 12px 0 0;
   max-height: 240px;
   overflow: auto;
+  padding: 12px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 4px;
 }
 
 @media (max-width: 980px) {
@@ -422,5 +589,237 @@ pre {
 
   .composer button {
     min-height: 46px;
+  }
+}
+
+/* Модальное окно для документов */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(24, 33, 31, 0.75);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal.active {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: var(--panel);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.modal-close {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+.modal-body h1,
+.modal-body h2,
+.modal-body h3,
+.modal-body h4,
+.modal-body h5,
+.modal-body h6 {
+  margin-top: 24px;
+  margin-bottom: 12px;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.modal-body h1:first-child,
+.modal-body h2:first-child,
+.modal-body h3:first-child {
+  margin-top: 0;
+}
+
+.modal-body h1 {
+  font-size: 28px;
+}
+
+.modal-body h2 {
+  font-size: 22px;
+}
+
+.modal-body h3 {
+  font-size: 18px;
+}
+
+.modal-body h4 {
+  font-size: 16px;
+}
+
+.modal-body p {
+  margin: 0 0 12px;
+}
+
+.modal-body ul,
+.modal-body ol {
+  margin: 12px 0;
+  padding-left: 28px;
+}
+
+.modal-body li {
+  margin-bottom: 8px;
+}
+
+.modal-body code {
+  background: var(--soft);
+  color: var(--accent-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "Monaco", "Courier New", monospace;
+  font-size: 13px;
+}
+
+.modal-body pre {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+
+.modal-body pre code {
+  background: none;
+  padding: 0;
+}
+
+.modal-body blockquote {
+  border-left: 4px solid var(--accent);
+  padding-left: 16px;
+  margin: 16px 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.modal-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+.modal-body th,
+.modal-body td {
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.modal-body th {
+  background: var(--soft);
+  font-weight: 600;
+}
+
+.modal-body a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.modal-body a:hover {
+  text-decoration: underline;
+}
+
+/* Highlighting для прокрутки к пункту */
+.highlight-section {
+  background: rgba(224, 180, 75, 0.15);
+  padding: 8px;
+  margin: -8px;
+  border-radius: 6px;
+  animation: highlightPulse 1.5s ease-out;
+}
+
+@keyframes highlightPulse {
+  0% {
+    background: rgba(224, 180, 75, 0.3);
+  }
+  100% {
+    background: rgba(224, 180, 75, 0.15);
+  }
+}
+
+@media (max-width: 640px) {
+  .modal-content {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  
+  .modal-body {
+    padding: 16px;
   }
 }

@@ -8,6 +8,11 @@ from avtorgraf.presentation.http_server import create_server
 
 
 def main() -> None:
+    """
+    Точка входа приложения АВТОГРАФ.
+    
+    Инициализирует все компоненты и запускает HTTP сервер.
+    """
     settings = Settings.from_env()
     repository = ConversationRepository(settings.database_path)
     lightrag = LightRagClient(settings)
@@ -19,7 +24,9 @@ def main() -> None:
         chat_service,
         lightrag,
     )
-    print(f"Avtorgraf listening on http://{settings.app_host}:{settings.app_port}")
+    print(f"🚀 Avtorgraf запущен на http://{settings.app_host}:{settings.app_port}")
+    print(f"📊 База данных: {settings.database_path}")
+    print(f"🔗 LightRAG: {settings.lightrag_base_url}")
     server.serve_forever()
 
 

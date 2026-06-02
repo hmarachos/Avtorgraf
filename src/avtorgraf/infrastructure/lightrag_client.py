@@ -11,15 +11,29 @@ from avtorgraf.config import Settings
 
 
 class LightRagError(RuntimeError):
+    """Ошибка при взаимодействии с LightRAG API."""
     pass
 
 
 class LightRagClient:
+    """
+    HTTP клиент для взаимодействия с LightRAG API.
+    
+    Поддерживает аутентификацию через API ключ или Bearer токен.
+    """
+    
     def __init__(self, settings: Settings) -> None:
+        """
+        Инициализирует клиент с настройками подключения.
+        
+        Args:
+            settings: Настройки приложения с параметрами LightRAG
+        """
         self.settings = settings
         self.base_url = settings.lightrag_base_url.rstrip("/")
 
     def _headers(self, content_type: str = "application/json") -> dict[str, str]:
+        """Формирует HTTP заголовки для запросов."""
         headers = {"Accept": "application/json"}
         if content_type:
             headers["Content-Type"] = content_type
@@ -36,6 +50,21 @@ class LightRagClient:
         body: dict[str, Any] | None = None,
         query: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], int]:
+        """
+        Выполняет HTTP запрос к LightRAG API.
+        
+        Args:
+            method: HTTP метод (GET, POST и т.д.)
+            path: Путь API эндпоинта
+            body: Тело запроса (для POST)
+            query: Query параметры
+            
+        Returns:
+            Кортеж (ответ в виде словаря, время выполнения в мс)
+            
+        Raises:
+            LightRagError: При ошибке HTTP или недоступности сервера
+        """
         url = f"{self.base_url}{path}"
         if query:
             url = f"{url}?{urllib.parse.urlencode(query)}"
@@ -69,6 +98,18 @@ class LightRagClient:
         user_prompt: str,
         history: list[dict[str, str]],
     ) -> tuple[dict[str, Any], int]:
+        """
+        Отправляет вопрос в LightRAG и получает ответ.
+        
+        Args:
+            question: Вопрос пользователя
+            mode: Режим поиска (mix, hybrid, global, local, naive)
+            user_prompt: Системный промпт для формирования ответа
+            history: История диалога
+            
+        Returns:
+            Кортеж (ответ с контекстом, время выполнения в мс)
+        """
         payload = {
             "query": question,
             "mode": mode,
@@ -88,6 +129,7 @@ class LightRagClient:
         return self._request("POST", "/query", payload)
 
     def health(self) -> dict[str, Any]:
+        """Проверяет доступность LightRAG сервера."""
         try:
             data, elapsed_ms = self._request("GET", "/health")
             return {"ok": True, "elapsed_ms": elapsed_ms, "details": data}
@@ -95,9 +137,24 @@ class LightRagClient:
             return {"ok": False, "error": str(exc)}
 
     def documents(self) -> dict[str, Any]:
+        """Получает список документов из базы знаний LightRAG."""
         data, _ = self._request("GET", "/documents")
         return data
 
     def pipeline_status(self) -> dict[str, Any]:
+        """Получает статус обработки документов в LightRAG."""
         data, _ = self._request("GET", "/documents/pipeline_status")
+        return data
+
+    def get_document_content(self, document_name: str) -> dict[str, Any]:
+        """
+        Получает содержимое документа из LightRAG.
+        
+        Args:
+            document_name: Имя документа для получения
+            
+        Returns:
+            Словарь с содержимым документа
+        """
+        data, _ = self._request("GET", f"/documents/{urllib.parse.quote(document_name)}")
         return data

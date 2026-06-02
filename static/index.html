@@ -22,10 +22,13 @@
       <main class="workspace">
         <section class="chat-pane" aria-label="Диалог с ассистентом">
           <div class="toolbar">
-            <div class="role-tabs" aria-label="Роль пользователя">
-              <button class="active" data-role="ГИП">ГИП</button>
-              <button data-role="Авторский надзор">АН</button>
-              <button data-role="Технический надзор">ТН</button>
+            <div>
+              <label class="toolbar-label">Ваша роль</label>
+              <div class="role-tabs" aria-label="Роль пользователя">
+                <button class="active" data-role="ГИП">ГИП</button>
+                <button data-role="Авторский надзор">АН</button>
+                <button data-role="Технический надзор">ТН</button>
+              </div>
             </div>
             <label class="mode">
               <span>Режим</span>
@@ -67,7 +70,7 @@
             <textarea
               id="question"
               rows="3"
-              placeholder="Например: можно ли подписывать АОСР при выявленных дефектах бетона?"
+              placeholder="Например: можно ли подписывать Акта освидетельствования скрытых работ при выявленных дефектах бетона?"
               required
             ></textarea>
             <button type="submit" id="sendButton">Отправить</button>
@@ -76,27 +79,40 @@
 
         <aside class="side-pane" aria-label="Контекст и источники">
           <section class="panel">
-            <h2>Нормативные ссылки</h2>
-            <div id="references" class="empty">Появятся после ответа LightRAG.</div>
+            <h2>Информация</h2>
+            <div id="references" class="empty">Ссылки на документы отображаются внизу каждого ответа.</div>
           </section>
 
           <section class="panel compact">
             <h2>Контроль ответа</h2>
             <ul class="checklist">
+              <li>Ответы со ссылками на пункты норм</li>
               <li>Только база знаний LightRAG</li>
               <li>Приоритет норм Республики Беларусь</li>
-              <li>Пункты СН, СТБ и инструкций в ответе</li>
-              <li>История текущей сессии хранится в SQLite</li>
+              <li>История сессии в SQLite</li>
             </ul>
           </section>
 
           <section class="panel compact">
-            <h2>Документы</h2>
+            <h2>Документы LightRAG</h2>
             <button class="secondary" id="refreshDocs">Обновить статус</button>
             <pre id="docsStatus">Нет данных</pre>
           </section>
         </aside>
       </main>
+    </div>
+
+    <!-- Модальное окно для просмотра документов -->
+    <div id="documentModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalTitle">Документ</h2>
+          <button class="modal-close" id="closeModal">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+          Загрузка...
+        </div>
+      </div>
     </div>
 
     <script src="/app.js"></script>
