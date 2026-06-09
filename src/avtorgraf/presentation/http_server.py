@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -7,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from avtorgraf.application.chat_service import ChatService
+from avtorgraf.application.image_service import ImageAnalysisService
 from avtorgraf.infrastructure.lightrag_client import LightRagClient, LightRagError
+from avtorgraf.infrastructure.vision_client import VisionError
 
 
 class ApiHandler(SimpleHTTPRequestHandler):
@@ -18,6 +21,7 @@ class ApiHandler(SimpleHTTPRequestHandler):
     """
     
     chat_service: ChatService
+    image_service: ImageAnalysisService
     lightrag: LightRagClient
     static_dir: str
 
@@ -51,6 +55,9 @@ class ApiHandler(SimpleHTTPRequestHandler):
         """Обработчик POST запросов."""
         if self.path == "/api/chat":
             self._handle_chat()
+            return
+        if self.path == "/api/analyze-photo":
+            self._handle_photo_analysis()
             return
         self._json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
 
@@ -113,6 +120,49 @@ class ApiHandler(SimpleHTTPRequestHandler):
             self._json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
         except LightRagError as exc:
             self._json({"error": str(exc)}, HTTPStatus.BAD_GATEWAY)
+        except Exception as exc:
+            self._json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+
+    def _handle_photo_analysis(self) -> None:
+        """Обрабатывает запрос на анализ фотографии."""
+        try:
+            payload = self._read_json()
+            
+            # Извлекаем данные изображения
+            image_base64 = payload.get("image", "")
+            if not image_base64:
+                self._json({"error": "Изображение не предоставлено"}, HTTPStatus.BAD_REQUEST)
+                return
+            
+            # Определяем формат изображения
+            image_format = payload.get("format", "jpeg")
+            session_id = payload.get("session_id")
+            focus_hint = payload.get("focus_hint", "")  # Текстовый запрос пользователя
+            
+            # Декодируем base64
+            try:
+                # Удаляем data URL prefix если есть
+                if "," in image_base64:
+                    image_base64 = image_base64.split(",")[1]
+                image_data = base64.b64decode(image_base64)
+            except Exception as exc:
+                self._json({"error": f"Ошибка декодирования изображения: {exc}"}, HTTPStatus.BAD_REQUEST)
+                return
+            
+            # Анализируем фото
+            result = self.image_service.analyze_photo(
+                image_data=image_data,
+                image_format=image_format,
+                session_id=session_id,
+                focus_hint=focus_hint,
+            )
+            
+            self._json(self._format_response(result))
+            
+        except VisionError as exc:
+            self._json({"error": f"Ошибка анализа: {exc}"}, HTTPStatus.BAD_GATEWAY)
+        except LightRagError as exc:
+            self._json({"error": f"Ошибка LightRAG: {exc}"}, HTTPStatus.BAD_GATEWAY)
         except Exception as exc:
             self._json({"error": str(exc)}, HTTPStatus.INTERNAL_SERVER_ERROR)
 
@@ -250,6 +300,7 @@ def create_server(
     port: int,
     static_dir: str,
     chat_service: ChatService,
+    image_service: ImageAnalysisService,
     lightrag: LightRagClient,
 ) -> ThreadingHTTPServer:
     """
@@ -260,6 +311,7 @@ def create_server(
         port: Порт сервера
         static_dir: Директория со статическими файлами
         chat_service: Сервис обработки вопросов
+        image_service: Сервис анализа фотографий
         lightrag: Клиент LightRAG
         
     Returns:
@@ -271,6 +323,7 @@ def create_server(
         pass
 
     BoundHandler.chat_service = chat_service
+    BoundHandler.image_service = image_service
     BoundHandler.lightrag = lightrag
     BoundHandler.static_dir = static_dir
     return ThreadingHTTPServer((host, port), BoundHandler)

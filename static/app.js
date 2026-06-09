@@ -1,6 +1,7 @@
 const state = {
   sessionId: localStorage.getItem("avtorgraf_session_id") || "",
   role: localStorage.getItem("avtorgraf_role") || "ГИП",
+  selectedPhoto: null, // Данные выбранной фотографии
 };
 
 const messages = document.querySelector("#messages");
@@ -11,6 +12,10 @@ const mode = document.querySelector("#mode");
 const refs = document.querySelector("#references");
 const statusNode = document.querySelector("#status");
 const docsStatus = document.querySelector("#docsStatus");
+const photoInput = document.querySelector("#photoInput");
+const photoPreview = document.querySelector("#photoPreview");
+const previewImage = document.querySelector("#previewImage");
+const removePhotoBtn = document.querySelector("#removePhoto");
 
 /**
  * Простой парсер markdown для основного форматирования
@@ -387,12 +392,172 @@ function handleRegularResponse(payload, assistantMessage) {
  */
 form.addEventListener("submit", (event) => {
   event.preventDefault();
+  
+  // Если есть выбранное фото, анализируем его
+  if (state.selectedPhoto) {
+    analyzePhoto();
+    return;
+  }
+  
   const text = question.value.trim();
   if (!text) return;
   question.value = "";
   question.style.height = "auto"; // Сбрасываем высоту для следующего ввода
   ask(text);
 });
+
+// ============================================================================
+// Обработка загрузки и анализа фотографий
+// ============================================================================
+
+/**
+ * Обработчик выбора фотографии
+ */
+photoInput.addEventListener("change", (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Проверяем тип файла
+  if (!file.type.startsWith("image/")) {
+    alert("Пожалуйста, выберите изображение");
+    return;
+  }
+  
+  // Проверяем размер (макс 10MB)
+  if (file.size > 10 * 1024 * 1024) {
+    alert("Размер изображения не должен превышать 10MB");
+    return;
+  }
+  
+  // Читаем файл и показываем превью
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    state.selectedPhoto = {
+      data: e.target.result,
+      format: file.type.split("/")[1] || "jpeg",
+      name: file.name,
+    };
+    
+    // Показываем превью
+    previewImage.src = e.target.result;
+    photoPreview.style.display = "block";
+    
+    // Обновляем placeholder с подсказкой
+    question.placeholder = "Опишите, на что обратить внимание (например: 'нарушения при устройстве откосов котлована') или отправьте фото сразу";
+    question.focus();
+  };
+  reader.readAsDataURL(file);
+});
+
+/**
+ * Удаление выбранной фотографии
+ */
+removePhotoBtn.addEventListener("click", () => {
+  state.selectedPhoto = null;
+  photoPreview.style.display = "none";
+  previewImage.src = "";
+  photoInput.value = "";
+  question.placeholder = "Например: можно ли подписывать Акта освидетельствования скрытых работ при выявленных дефектах бетона?";
+});
+
+/**
+ * Анализ фотографии
+ */
+async function analyzePhoto() {
+  if (!state.selectedPhoto) return;
+  
+  const userComment = question.value.trim();
+  
+  // Добавляем сообщение с фото
+  addPhotoMessage(state.selectedPhoto.data, userComment);
+  
+  // Очищаем форму
+  question.value = "";
+  question.style.height = "auto";
+  const savedPhoto = state.selectedPhoto;
+  const savedComment = userComment; // Сохраняем комментарий
+  state.selectedPhoto = null;
+  photoPreview.style.display = "none";
+  previewImage.src = "";
+  photoInput.value = "";
+  question.placeholder = "Например: можно ли подписывать Акта освидетельствования скрытых работ при выявленных дефектах бетона?";
+  
+  setLoading(true);
+  
+  try {
+    const response = await fetch("/api/analyze-photo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image: savedPhoto.data,
+        format: savedPhoto.format,
+        session_id: state.sessionId || null,
+        focus_hint: savedComment || "", // Передаем текстовый запрос
+      }),
+    });
+    
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.error || `HTTP ${response.status}`);
+    }
+    
+    const payload = await response.json();
+    
+    // Сохраняем session_id
+    state.sessionId = payload.session_id;
+    localStorage.setItem("avtorgraf_session_id", state.sessionId);
+    
+    // Отображаем ответ
+    const assistantMessage = createAssistantMessage();
+    assistantMessage.content = [payload.answer];
+    assistantMessage.references = payload.references || [];
+    
+    updateAssistantMessageContent(assistantMessage);
+    finalizeAssistantMessage(assistantMessage);
+    
+  } catch (error) {
+    console.error("❌ Ошибка анализа фото:", error);
+    addMessage("assistant", `❌ Не удалось проанализировать фото: ${error.message}`);
+  } finally {
+    setLoading(false);
+  }
+}
+
+/**
+ * Добавляет сообщение с фотографией
+ */
+function addPhotoMessage(photoDataUrl, comment) {
+  const article = document.createElement("article");
+  article.className = "message user";
+  
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  avatar.textContent = "Вы";
+  
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  
+  // Добавляем фото
+  const img = document.createElement("img");
+  img.src = photoDataUrl;
+  img.style.maxWidth = "300px";
+  img.style.maxHeight = "300px";
+  img.style.borderRadius = "8px";
+  img.style.marginBottom = comment ? "8px" : "0";
+  bubble.appendChild(img);
+  
+  // Добавляем комментарий если есть
+  if (comment) {
+    const textNode = document.createElement("p");
+    textNode.textContent = comment;
+    textNode.style.marginTop = "8px";
+    bubble.appendChild(textNode);
+  }
+  
+  article.append(avatar, bubble);
+  messages.append(article);
+  messages.scrollTop = messages.scrollHeight;
+}
 
 /**
  * Обработчик быстрых вопросов

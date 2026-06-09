@@ -428,12 +428,22 @@ h2 {
 }
 
 .composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 128px;
-  gap: 10px;
   padding: 14px;
   border-top: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.9);
+}
+
+.input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
 }
 
 textarea {
@@ -446,15 +456,83 @@ textarea {
   color: var(--ink);
 }
 
+.input-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.photo-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.photo-upload:hover {
+  background: rgba(36, 93, 77, 0.08);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .composer button {
   background: var(--accent);
   color: white;
   padding: 0 18px;
+  min-height: 48px;
 }
 
 .composer button:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+
+/* Превью загруженной фотографии */
+.photo-preview {
+  position: relative;
+  display: inline-block;
+  padding: 8px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.photo-preview img {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 4px;
+  display: block;
+}
+
+.remove-photo {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent-2);
+  color: white;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.remove-photo:hover {
+  background: #9a3e2a;
+  transform: scale(1.1);
 }
 
 .side-pane {
@@ -556,7 +634,6 @@ pre {
 
   .toolbar,
   .composer {
-    grid-template-columns: 1fr;
     flex-direction: column;
     align-items: stretch;
   }
@@ -577,12 +654,28 @@ pre {
     grid-template-columns: 1fr;
   }
 
-  .composer {
-    display: grid;
+  .input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .input-actions {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .photo-upload {
+    width: 100%;
+    height: 48px;
   }
 
   .composer button {
-    min-height: 46px;
+    flex: 1;
+    min-height: 48px;
+  }
+
+  .photo-preview img {
+    max-width: 150px;
+    max-height: 150px;
   }
 }
 

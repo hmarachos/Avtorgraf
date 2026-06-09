@@ -67,13 +67,30 @@
           </div>
 
           <form class="composer" id="chatForm">
-            <textarea
-              id="question"
-              rows="3"
-              placeholder="Например: можно ли подписывать Акта освидетельствования скрытых работ при выявленных дефектах бетона?"
-              required
-            ></textarea>
-            <button type="submit" id="sendButton">Отправить</button>
+            <div class="input-area">
+              <div class="input-row">
+                <textarea
+                  id="question"
+                  rows="3"
+                  placeholder="Например: можно ли подписывать Акта освидетельствования скрытых работ при выявленных дефектах бетона?"
+                ></textarea>
+                <div class="input-actions">
+                  <label class="photo-upload" title="Загрузить фото">
+                    <input type="file" id="photoInput" accept="image/*" style="display: none" />
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                      <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                  </label>
+                  <button type="submit" id="sendButton">Отправить</button>
+                </div>
+              </div>
+              <div id="photoPreview" class="photo-preview" style="display: none">
+                <img id="previewImage" src="" alt="Превью" />
+                <button type="button" id="removePhoto" class="remove-photo" title="Удалить фото">×</button>
+              </div>
+            </div>
           </form>
         </section>
 

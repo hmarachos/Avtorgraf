@@ -36,6 +36,10 @@ class Settings:
     lightrag_timeout_seconds: int
     default_query_mode: str
     system_prompt: str
+    # Vision модель для анализа фотографий
+    openrouter_api_key: str
+    openrouter_base_url: str
+    vision_model: str
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -87,4 +91,8 @@ class Settings:
                     "ПОМНИ: Каждое утверждение должно иметь ссылку на конкретный пункт документа! Ссылки встраивай прямо в текст, не выноси их в отдельный список!"
                 ),
             ),
+            # Vision модель для анализа фотографий
+            openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
+            openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+            vision_model=os.getenv("VISION_MODEL", "anthropic/claude-3.5-haiku"),
         )
