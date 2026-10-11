@@ -2,12 +2,21 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import time
 import urllib.error
 import urllib.request
 from typing import Any
 
 from avtorgraf.config import Settings
+
+# Настройка логирования
+logger = logging.getLogger("avtorgraf.vision")
+logger.setLevel(logging.DEBUG)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("🔍 [VISION] %(message)s"))
+    logger.addHandler(handler)
 
 
 class VisionError(RuntimeError):
@@ -25,7 +34,7 @@ class VisionClient:
     ANALYSIS_PROMPT = """## КРИТИЧЕСКИ ВАЖНО: СПЕЦИАЛЬНЫЙ ЗАПРОС ПОЛЬЗОВАТЕЛЯ
 
 Пользователь просит проанализировать фото со специфическим фокусом:
-**{focus_query}**
+**{focus_hint}**
 
 ТВОЯ ПЕРВООЧЕРЕДНАЯ ЗАДАЧА:
 1. ВНИМАТЕЛЬНО ИЗУЧИ фотографию на предмет элементов, связанных с запросом
@@ -75,7 +84,7 @@ class VisionClient:
 
 ФОРМАТ ОТВЕТА:
 
-### АНАЛИЗ ПО ЗАПРОСУ: {focus_query}
+### АНАЛИЗ ПО ЗАПРОСУ: {focus_hint}
 
 [Здесь детально опиши то, что просил пользователь. Если на фото это не видно - так и напиши]
 
@@ -88,20 +97,30 @@ class VisionClient:
 **Описание:** [что видно]
 **Местоположение:** [где на фото]
 **Критичность:** [критическое/значительное/незначительное]
+
+НАЙДЕНО_НАРУШЕНИЙ: [ДА/НЕТ]
 """
 
-    REFORMAT_PROMPT = """На основе описания нарушений создай краткий поисковый запрос для базы знаний нормативных документов Республики Беларусь.
+    REFORMAT_PROMPT = """## ЗАДАЧА: Создание поискового запроса для базы знаний
 
-ВАЖНО:
-- Если в описании упоминаются КОТЛОВАН, ОТКОСЫ, ТРАНШЕИ - включи эти термины в запрос В ПЕРВУЮ ОЧЕРЕДЬ
-- Для земляных работ используй термины: "котлован", "откосы", "крепление стенок", "угол заложения", "земляные работы"
-- Запрос должен быть конкретным и специфичным
+### Специфический фокус анализа:
+{focus_hint}
 
-Формат: только текст запроса, без объяснений. Не более 2-3 предложений.
+### Описание нарушений:
+{violations_description}
 
-ПРИМЕРЫ:
-- Если про котлован: "требования к углу заложения откосов котлована, крепление стенок котлована, расстояние от бровки до складирования материалов"
-- Если про бетон: "требования к бетонным работам, дефекты бетона, контроль качества бетонирования"
+---
+
+ИНСТРУКЦИЯ:
+1. Учитывай СПЕЦИФИЧЕСКИЙ ФОКУС выше при создании запроса
+2. Если фокус касается котлованов/откосов - включи термины: "котлован", "откосы", "крепление стенок", "угол заложения", "бровка котлована"
+3. Если фокус про бетон/конструкции - включи: "бетонные работы", "дефекты бетона", "арматура", "коррозия"
+4. Если фокус про безопасность - включи: "охрана труда", "техника безопасности", "страховка", "ограждение"
+5. Запрос должен быть конкретным и специфичным для нормативов РБ
+
+Формат: только текст запроса, без объяснений, 2-3 предложения.
+
+ПРИМЕРЫ для котлована: "требования к углу заложения откосов котлована, крепление стенок котлована при глубине более 1.25м, расстояние от бровки до складирования материалов РБ"
 """
     
     def __init__(self, settings: Settings) -> None:
@@ -146,25 +165,33 @@ class VisionClient:
         
         # Формируем промпт с учетом фокуса пользователя
         if focus_hint and focus_hint.strip():
-            # УЛЬТРА-КОРОТКИЙ промпт для фокусированного анализа
-            analysis_prompt = f"""ВОПРОС: {focus_hint.strip()}
+            # СТРОГИЙ ФОКУС - отвечаем ТОЛЬКО на вопрос пользователя
+            analysis_prompt = f"""## ЗАДАЧА: Ответь ТОЛЬКО на конкретный ВОПРОС ПОЛЬЗОВАТЕЛЯ
 
-Изучи фотографию и ответь на этот вопрос. 
+ВОПРОС ПОЛЬЗОВАТЕЛЯ: {focus_hint.strip()}
 
-Если на фото есть котлован - опиши:
-- Угол откосов
-- Тип грунта
-- Крепление стенок
-- Расстояние от бровки до материалов
-- Признаки обрушения
+ТРЕБОВАНИЯ (строго):
+1. Отвечай ТОЛЬКО на заданный ВОПРОС ПОЛЬЗОВАТЕЛЯ
+2. НЕ описывай: котлованы, откосы, крепления, ограждения котлована, складирование материалов - если вопрос не про них
+3. Если на фото НЕТ элементов для ответа - ответь: "НЕТ_НАРУШЕНИЙ"
+4. ПРИМЕР правильного ответа на "средства защиты": только про каски, перчатки, спецодежду, страховки, ограждения опасных зон
+5. Будь кратким - 1-3 предложения по существу
+6. В КОНЦЕ ответа добавь строку: "НАЙДЕНО_НАРУШЕНИЙ: ДА" или "НАЙДЕНО_НАРУШЕНИЙ: НЕТ"
 
-Если запрошенного объекта НЕТ на фото - сразу напиши об этом.
+ФОРМАТ ОТВЕТА:
+[Ответ на вопрос пользователя]
 
-Формат: сначала ответ на вопрос, потом другие нарушения."""
+НАЙДЕНО_НАРУШЕНИЙ: [ДА/НЕТ]
+
+НЕ описывай другие нарушения!"""
         else:
             # Общий промпт для анализа всего
-            focus_query = "общий анализ всех нарушений"
-            analysis_prompt = self.ANALYSIS_PROMPT.format(focus_query=focus_query)
+            focus_hint = "общий анализ всех нарушений"
+            analysis_prompt = self.ANALYSIS_PROMPT.format(focus_hint=focus_hint)
+        
+        # Логирование промпта шага 1
+        logger.info("=== ШАГ 1: ANALYZE_IMAGE ===")
+        logger.info(f"📝 USER PROMPT:\n{analysis_prompt[:800]}...")
         
         payload = {
             "model": self.settings.vision_model,
@@ -199,26 +226,36 @@ class VisionClient:
         
         return self._request(payload)
     
-    def create_search_query(self, violations_description: str) -> tuple[str, int]:
+    def create_search_query(self, violations_description: str, focus_hint: str = "") -> tuple[str, int]:
         """
         Создает поисковый запрос для LightRAG на основе описания нарушений (ШАГ 2).
         
         Args:
             violations_description: Описание выявленных нарушений
+            focus_hint: Текстовый запрос пользователя для фокусировки
             
         Returns:
             Кортеж (поисковый запрос, время выполнения в мс)
         """
+        # Форматируем промпт с учетом фокуса
+        system_prompt = self.REFORMAT_PROMPT.format(
+            focus_hint=focus_hint if focus_hint else "Общий анализ",
+            violations_description=violations_description
+        )
+        
+        logger.info("=== ШАГ 2: CREATE_SEARCH_QUERY ===")
+        logger.info(f"📝 SYSTEM PROMPT:\n{system_prompt[:500]}...")
+        
         payload = {
             "model": self.settings.vision_model,
             "messages": [
                 {
                     "role": "system",
-                    "content": self.REFORMAT_PROMPT,
+                    "content": system_prompt,
                 },
                 {
                     "role": "user",
-                    "content": f"Описание нарушений:\n\n{violations_description}",
+                    "content": f"Создай поисковый запрос для базы знаний нормативных документов РБ на основе описания нарушений и фокуса выше.",
                 },
             ],
             "max_tokens": 200,
@@ -230,8 +267,10 @@ class VisionClient:
         # Извлекаем текст ответа
         if "choices" in data and len(data["choices"]) > 0:
             content = data["choices"][0].get("message", {}).get("content", "")
+            logger.info(f"📤 ОТВЕТ ШАГ 2:\n{content[:300]}...")
             return content.strip(), elapsed_ms
         
+        logger.warning("⚠️ Нет ответа от модели на шаге 2")
         return violations_description[:500], elapsed_ms
     
     def _request(self, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
@@ -274,6 +313,14 @@ class VisionClient:
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError:
+            logger.error("⚠️ Ошибка парсинга JSON ответа")
             return {"error": "Invalid JSON response"}, elapsed_ms
+        
+        # Логируем ответ модели
+        if "choices" in parsed and len(parsed["choices"]) > 0:
+            content = parsed["choices"][0].get("message", {}).get("content", "")
+            logger.info(f"📤 ОТВЕТ МОДЕЛИ:\n{content[:500]}...")
+        else:
+            logger.warning("⚠️ Нет choices в ответе")
         
         return parsed if isinstance(parsed, dict) else {"data": parsed}, elapsed_ms

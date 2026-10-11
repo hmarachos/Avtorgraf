@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from avtorgraf.config import Settings
 from avtorgraf.domain.models import AssistantAnswer, Reference, new_session_id
 from avtorgraf.infrastructure.lightrag_client import LightRagClient
 from avtorgraf.infrastructure.vision_client import VisionClient, VisionError
+
+# Настройка логирования
+logger = logging.getLogger("avtorgraf.image_service")
+logger.setLevel(logging.DEBUG)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("📸 [IMAGE_SERVICE] %(message)s"))
+    logger.addHandler(handler)
 
 
 class ImageAnalysisService:
@@ -25,27 +34,27 @@ class ImageAnalysisService:
 
 ## Выявленные нарушения
 
-[ОБЯЗАТЕЛЬНО начни с нарушений, связанных с ОСНОВНЫМ ЗАПРОСОМ ПОЛЬЗОВАТЕЛЯ. 
-Если это котлован/откосы - опиши ИХ В ПЕРВУЮ ОЧЕРЕДЬ.
-Опиши нарушения в 1-2 абзацах. Каждое утверждение подкрепи ссылкой на документ в формате **[Документ, п. X]**]
+[Отвечай ТОЛЬКО по теме из "Фокус запроса".
+Пример: если фокус "средства защиты рабочих" - опиши только: каски, перчатки, спецодежда, страховки, ограждения опасных зон, защитные барьеры.
+Если фокус "котлован/откосы" - только про них.
+
+Если в описании нарушений ничего нет по теме фокуса - напиши: "⚠️ По теме '[фокус]' нарушений не выявлено."
+
+Каждое утверждение с ссылкой **[Документ, п. X]**]
 
 ---
 
 ## Методы устранения
 
-[Опиши методы устранения нарушений в 1-2 абзацах, ссылаясь на нормативные документы. 
-СНАЧАЛА методы устранения для основного запроса, ПОТОМ остальное.
-Каждое действие подкрепи ссылкой в формате **[Документ, п. X]**]
+[Только для нарушений по фокусу пользователя. Кратко. С ссылками.]
 
 ---
 
-ВАЖНО:
+СТРОГО:
+- Отвечай ТОЛЬКО по фокусу - НЕ пиши про котлованы, откосы, складирование если фокус про средства защиты
 - Используй ТОЛЬКО найденный в LightRAG контекст
-- Каждое утверждение должно иметь ссылку на конкретный пункт документа
-- Ссылки встраивай прямо в текст в формате **[СН 1.03.01-2019, п. 3.4]**
-- ПРИОРИТЕТ темам из запроса пользователя (котлован, откосы и т.д.)
-- Отвечай кратко и по делу
-- Действуй в строгом соответствии с инструкцией об осуществлении авторского надзора в Республике Беларусь"""
+- Каждое утверждение с ссылкой на пункт документа
+- Отвечай кратко - не более 3-5 предложений"""
     
     def __init__(
         self,
@@ -82,34 +91,56 @@ class ImageAnalysisService:
         resolved_session_id = session_id or new_session_id()
         total_elapsed_ms = 0
         
+        logger.info("=" * 50)
+        logger.info(f"🚀 НАЧАЛО АНАЛИЗА (session={resolved_session_id})")
+        logger.info(f"🎯 FOCUS_HINT: {focus_hint or '(нет)'}")
+        
         # ===== ШАГ 1: Анализ фотографии =====
+        logger.info("⏳ ШАГ 1: Анализ изображения...")
         step1_result, step1_ms = self.vision.analyze_image(image_data, image_format, focus_hint)
         total_elapsed_ms += step1_ms
         
-        # Извлекаем описание нарушений из ответа
-        violations_description = self._extract_violations(step1_result)
+        logger.info(f"✅ ШАГ 1 завершен за {step1_ms}мс")
         
-        if not violations_description:
+        # Извлекаем описание нарушений из ответа и флаг найденных нарушений
+        violations_description, found_violations = self._extract_violations(step1_result)
+        
+        logger.info(f"📋 violations_description: {violations_description[:200]}...")
+        logger.info(f"🎯 found_violations: {found_violations}")
+        
+        # Если нарушений не найдено
+        if not violations_description or not found_violations:
+            answer_text = violations_description if violations_description else "На фотографии не выявлено нарушений по запросу пользователя."
             return AssistantAnswer(
                 session_id=resolved_session_id,
-                answer="На фотографии не выявлено нарушений строительных норм.",
+                answer=answer_text,
                 references=[],
                 elapsed_ms=total_elapsed_ms,
-                raw={"step1": step1_result},
+                raw={
+                    "step1": step1_result,
+                    "found_violations": found_violations,
+                },
             )
         
         # ===== ШАГ 2: Формирование поискового запроса =====
-        # Добавляем фокус в поисковый запрос если есть
-        search_context = violations_description
-        if focus_hint and focus_hint.strip():
-            search_context = f"Запрос: {focus_hint.strip()}\n\nНарушения:\n{violations_description}"
-        
-        search_query, step2_ms = self.vision.create_search_query(search_context)
+        # Передаем фокус в create_search_query для более точного запроса к LightRAG
+        search_query, step2_ms = self.vision.create_search_query(
+            violations_description, 
+            focus_hint=focus_hint if focus_hint else ""
+        )
         total_elapsed_ms += step2_ms
+        
+        logger.info(f"✅ ШАГ 2 завершен за {step2_ms}мс")
+        logger.info(f"🔍 search_query: {search_query[:200]}...")
         
         # ===== ШАГ 3: Запрос к LightRAG =====
         # Формируем полный запрос с промптом для финального ответа
+        focus_context = f" (фокус пользователя: {focus_hint.strip()})" if focus_hint and focus_hint.strip() else ""
+        
+        logger.info("⏳ ШАГ 3: Запрос к LightRAG...")
         full_query = f"""
+Фокус запроса{focus_context}
+
 Описание нарушений:
 {violations_description}
 
@@ -125,9 +156,15 @@ class ImageAnalysisService:
         )
         total_elapsed_ms += step3_ms
         
+        logger.info(f"✅ ШАГ 3 завершен за {step3_ms}мс")
+        logger.info(f"📝 full_query: {full_query[:300]}...")
+        
         # Извлекаем ответ и ссылки
         answer = self._extract_answer(lightrag_result)
         references = self._extract_references(lightrag_result)
+        
+        logger.info(f"🎉 АНАЛИЗ ЗАВЕРШЕН (всего {total_elapsed_ms}мс)")
+        logger.info(f"📤 ОТВЕТ:\n{answer[:300]}...")
         
         return AssistantAnswer(
             session_id=resolved_session_id,
@@ -141,21 +178,75 @@ class ImageAnalysisService:
             },
         )
     
-    def _extract_violations(self, data: dict[str, Any]) -> str:
+    def _extract_violations(self, data: dict[str, Any]) -> tuple[str, bool]:
         """
         Извлекает описание нарушений из ответа Vision модели.
+        
+        Returns:
+            tuple[description: str, found_violations: bool]
         """
+        logger.debug(f"_extract_violations: data keys = {list(data.keys())}")
+        
+        content = ""
+        
         if "choices" in data and len(data["choices"]) > 0:
             content = data["choices"][0].get("message", {}).get("content", "")
-            return content.strip()
+            logger.debug(f"_extract_violations: extracted content = {content[:200]}...")
+        else:
+            # Fallback: пробуем другие ключи
+            for key in ("response", "answer", "result", "content"):
+                value = data.get(key)
+                if isinstance(value, str) and value.strip():
+                    logger.debug(f"_extract_violations: fallback key '{key}' = {value[:100]}...")
+                    content = value
+                    break
         
-        # Fallback: пробуем другие ключи
-        for key in ("response", "answer", "result", "content"):
-            value = data.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
+        if not content:
+            logger.debug("_extract_violations: no content found")
+            return "", False
         
-        return ""
+        # Определяем, найдены ли нарушения
+        found_violations = True
+        
+        # Проверяем маркеры
+        markers = {
+            "НАЙДЕНО_НАРУШЕНИЙ: НЕТ": False,
+            "НАЙДЕНО_НАРУШЕНИЙ: ДА": True,
+            "НЕТ_НАРУШЕНИЙ": False,
+        }
+        
+        for marker, has_violations in markers.items():
+            if marker in content:
+                logger.debug(f"_extract_violations: found marker '{marker}', violations = {has_violations}")
+                found_violations = has_violations
+                # Убираем маркер из контента
+                content = content.replace(marker, "").strip()
+                break
+        
+        # Если маркеры не найдены, проверяем ключевые слова в тексте
+        if found_violations:  # Пока True
+            negative_phrases = [
+                "не видно", "не видно нарушений", "нарушений не выявлено",
+                "не найден", "не найдены", "отсутствует", "отсутствуют",
+                "⚠️ На фотографии"
+            ]
+            if any(phrase in content.lower() for phrase in negative_phrases):
+                found_violations = False
+        
+        # Убираем строку с маркером если есть (альтернативный формат)
+        lines = content.split("\n")
+        cleaned_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if stripped in ["НАЙДЕНО_НАРУШЕНИЙ: НЕТ", "НАЙДЕНО_НАРУШЕНИЙ: ДА"]:
+                continue
+            if "НАЙДЕНО_НАРУШЕНИЙ:" in stripped:
+                continue
+            cleaned_lines.append(line)
+        
+        cleaned_content = "\n".join(cleaned_lines).strip()
+        
+        return cleaned_content, found_violations
     
     def _extract_answer(self, data: dict[str, Any]) -> str:
         """
